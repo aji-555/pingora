@@ -70,6 +70,14 @@ openssl = [
     "openssl_derived",
 ]
 
+openssl_mtls = [
+    "pingora-core/openssl_mtls",
+    "pingora-proxy?/openssl",
+    "pingora-cache?/openssl",
+    "pingora-load-balancing?/openssl",
+    "openssl_derived",
+]
+
 ## Use [BoringSSL](https://crates.io/crates/boring) for tls 
 ##
 ## Requires native boring libraries and build tooling

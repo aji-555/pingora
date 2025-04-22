@@ -14,7 +14,7 @@
 
 //! The listening endpoints (TCP and TLS) and their configurations.
 
-mod l4;
+pub mod l4;
 
 #[cfg(feature = "any_tls")]
 pub mod tls;
@@ -164,6 +164,19 @@ impl Listeners {
         Ok(listeners)
     }
 
+    #[cfg(feature = "openssl_mtls")]
+    pub fn mtls(
+        addr: &str,
+        ca_path: &str,
+        cert_path: &str,
+        key_path: &str,
+        passphrase: Option<&str>,
+    ) -> Result<Self> {
+        let mut listeners = Self::new();
+        listeners.add_mtls(addr, ca_path, cert_path, key_path, passphrase)?;
+        Ok(listeners)
+    }
+
     /// Add a TCP endpoint to `self`.
     pub fn add_tcp(&mut self, addr: &str) {
         self.add_address(ServerAddress::Tcp(addr.into(), None));
@@ -184,6 +197,23 @@ impl Listeners {
     /// server side TLS settings.
     pub fn add_tls(&mut self, addr: &str, cert_path: &str, key_path: &str) -> Result<()> {
         self.add_tls_with_settings(addr, None, TlsSettings::intermediate(cert_path, key_path)?);
+        Ok(())
+    }
+
+    #[cfg(feature = "openssl_mtls")]
+    pub fn add_mtls(
+        &mut self,
+        addr: &str,
+        ca_path: &str,
+        cert_path: &str,
+        key_path: &str,
+        passphrase: Option<&str>,
+    ) -> Result<()> {
+        self.add_tls_with_settings(
+            addr,
+            None,
+            TlsSettings::mtls_intermediate(ca_path, cert_path, key_path, passphrase)?,
+        );
         Ok(())
     }
 

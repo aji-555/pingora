@@ -96,6 +96,18 @@ impl<A> Service<A> {
         self.listeners.add_tls(addr, cert_path, key_path)
     }
 
+    #[cfg(feature = "openssl_mtls")]
+    pub fn add_mtls(
+        &mut self,
+        addr: &str,
+        ca_path: &str,
+        cert_path: &str,
+        key_path: &str,
+        passphrase: Option<&str>,
+    ) -> Result<()> {
+        self.listeners.add_mtls(addr, ca_path, cert_path, key_path, passphrase)
+    }
+
     /// Add a TLS listening endpoint with the given [`TlsSettings`] and [`TcpSocketOptions`].
     pub fn add_tls_with_settings(
         &mut self,

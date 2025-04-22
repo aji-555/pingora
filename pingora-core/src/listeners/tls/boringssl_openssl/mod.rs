@@ -86,6 +86,75 @@ impl TlsSettings {
         })
     }
 
+    #[cfg(feature = "openssl_mtls")]
+    pub fn mtls_intermediate(
+        ca_path: &str,
+        cert_path: &str,
+        key_path: &str,
+        passphrase: Option<&str>,
+    ) -> Result<Self> {
+        use std::fs;
+
+        use pingora_openssl::ssl::{SslOptions, SslVerifyMode};
+
+        let mut acceptor_builder = SslAcceptor::mozilla_intermediate(SslMethod::tls_server())
+            .or_err(
+                TLS_CONF_ERR,
+                "fail to create mozilla_intermediate mtls Acceptor",
+            )?;
+        acceptor_builder
+            .set_cipher_list("HIGH:!DSS:!aNULL:!SSLV2:!SSLV3@STRENGTH")
+            .or_err(TLS_CONF_ERR, "fail to set cipher list")?;
+        acceptor_builder.set_options(SslOptions::NO_SSLV2 | SslOptions::NO_SSLV3);
+
+        acceptor_builder
+            .set_ca_file(ca_path)
+            .or_err_with(TLS_CONF_ERR, || format!("fail to read ca file {ca_path}"))?;
+
+        acceptor_builder
+            .set_certificate_file(cert_path, SslFiletype::PEM)
+            .or_err_with(TLS_CONF_ERR, || {
+                format!("fail to read cert file {cert_path}")
+            })?;
+
+        let encrypted_private_key_fn = |path: &str,
+                                        passphrase: Option<&str>|
+         -> Result<
+            pingora_openssl::pkey::PKey<pingora_openssl::pkey::Private>,
+        > {
+            let buf = fs::read_to_string(path)
+                .or_err_with(TLS_CONF_ERR, || format!("fail to read key file {path}"))?;
+            match passphrase {
+                Some(passphrase) => pingora_openssl::pkey::PKey::private_key_from_pem_passphrase(
+                    buf.as_bytes(),
+                    passphrase.as_bytes(),
+                )
+                .or_err(
+                    TLS_CONF_ERR,
+                    "fail to load private key, please check the passphrase",
+                ),
+                None => pingora_openssl::pkey::PKey::private_key_from_pem(buf.as_bytes())
+                    .or_err(TLS_CONF_ERR, "fail to load private key"),
+            }
+        };
+
+        let key = encrypted_private_key_fn(key_path, passphrase)?;
+        acceptor_builder
+            .set_private_key(&key)
+            .or_err(TLS_CONF_ERR, "fail to set private key")?;
+
+        acceptor_builder
+            .check_private_key()
+            .or_err(TLS_CONF_ERR, "fail to check private key")?;
+        acceptor_builder.set_verify(SslVerifyMode::PEER | SslVerifyMode::FAIL_IF_NO_PEER_CERT);
+        acceptor_builder.set_verify_depth(1);
+
+        Ok(TlsSettings {
+            accept_builder: acceptor_builder,
+            callbacks: None,
+        })
+    }
+
     /// Create a new [`TlsSettings`] similar to [TlsSettings::intermediate()]. A struct that implements [TlsAcceptCallbacks]
     /// is needed to provide the certificate during the TLS handshake.
     pub fn with_callbacks(callbacks: TlsAcceptCallbacks) -> Result<Self> {
